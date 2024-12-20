@@ -97,37 +97,6 @@ async def process_help_button(message: types.Message):
     )
     logger.info(f"Пользователь {user_id} запросил помощь.")
 
-async def send_patent_details(message: types.Message, patent_id: str):
-    """Отправка детальной информации о патенте"""
-    try:
-        details = get_patent_details(patent_id)
-        
-        # Форматируем сообщение с деталями патента
-        response = (
-            f"📑 *Детали патента*\n\n"
-            f"🔍 *ID:* `{details.id}`\n"
-            f"📝 *Название:* {details.title}\n\n"
-            f"📅 *Дата публикации:* {details.publication_date}\n"
-            f"📋 *Дата заявки:* {details.application_date}\n\n"
-            f"👥 *Авторы:*\n{chr(10).join('- ' + author for author in details.authors)}\n\n"
-            f"💼 *Патентообладатели:*\n{chr(10).join('- ' + holder for holder in details.patent_holders)}\n\n"
-            f"🔰 *Коды МПК:*\n{chr(10).join('- ' + code for code in details.ipc_codes)}\n\n"
-            f"📖 *Реферат:*\n{details.abstract}"
-        )
-        
-        # Разбиваем длинное сообщение на части, если оно превышает лимит
-        max_length = 4096
-        for i in range(0, len(response), max_length):
-            chunk = response[i:i + max_length]
-            await message.answer(chunk, parse_mode="Markdown")
-            
-    except Exception as e:
-        logger.error(f"Ошибка при получении деталей патента {patent_id}: {e}")
-        await message.answer(
-            "⚠️ Произошла ошибка при получении деталей патента. Пожалуйста, попробуйте позже.",
-            reply_markup=create_main_keyboard()
-        )
-
 @router.message(SearchStates.WaitingForQuery)
 async def handle_search_query(message: types.Message, state: FSMContext):
     """Обработка поискового запроса"""
@@ -186,8 +155,21 @@ async def handle_search_query(message: types.Message, state: FSMContext):
                     continue
                     
             logger.info(f"Отправлены результаты поиска пользователю {user_id}")
+            
+            # Возвращаемся к ожиданию следующего запроса с тем же методом поиска
+            await state.set_state(SearchStates.WaitingForQuery)
+            await message.answer(
+                f"Введите следующий поисковый запрос или выберите другой метод поиска:",
+                reply_markup=create_main_keyboard()
+            )
         else:
-            await message.answer("❌ Патенты не найдены или произошла ошибка при поиске.")
+            await message.answer(
+                "❌ Патенты не найдены или произошла ошибка при поиске.\n"
+                "Попробуйте другой запрос или выберите другой метод поиска:", 
+                reply_markup=create_main_keyboard()
+            )
+            # Сохраняем текущий метод поиска
+            await state.set_state(SearchStates.WaitingForQuery)
             
     except Exception as e:
         logger.error(f"Ошибка при поиске: {e}")
@@ -195,8 +177,10 @@ async def handle_search_query(message: types.Message, state: FSMContext):
             "⚠️ Произошла ошибка при обработке вашего запроса. Пожалуйста, попробуйте позже.",
             reply_markup=create_main_keyboard()
         )
+        # Сохраняем текущий метод поиска даже при ошибке
+        await state.set_state(SearchStates.WaitingForQuery)
     
-    await state.clear()
+    # Убираем state.clear(), чтобы сохранить выбранный метод поиска
 
 def register_handlers(dispatcher: Dispatcher):
     dispatcher.include_router(router) 
