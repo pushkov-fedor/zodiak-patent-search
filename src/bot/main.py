@@ -3,32 +3,33 @@
 import asyncio
 import logging
 
-from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
+from src.application.use_cases.patent_search import PatentSearchUseCase
+from src.infrastructure.config.settings import settings
+from src.infrastructure.rospatent.config import RospatentConfig
+from src.infrastructure.rospatent.repository import RospatentRepository
+from src.interfaces.telegram.bot import PatentBot
 
-from src.bot.handlers import register_handlers
-from src.config.config import BOT_TOKEN, LOG_LEVEL
-
-# Настройка логирования
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 
 async def main():
-    # Инициализация бота и диспетчера с хранилищем в памяти для FSM
-    bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-    storage = MemoryStorage()
-    dp = Dispatcher(storage=storage)
+    # Настройка логирования
+    logging.basicConfig(
+        level=settings.log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     
-    # Регистрация обработчиков
-    register_handlers(dp)
+    # Инициализация зависимостей
+    rospatent_config = RospatentConfig(jwt_token=settings.rospatent_jwt)
+    patent_repository = RospatentRepository(rospatent_config)
+    search_use_case = PatentSearchUseCase(patent_repository)
+
+    # Создание и запуск бота
+    bot = PatentBot(
+        token=settings.bot_token,
+        search_use_case=search_use_case
+    )
     
-    try:
-        logging.info("Запуск бота")
-        await dp.start_polling(bot)
-    finally:
-        await bot.close()
+    await bot.start()
+
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
