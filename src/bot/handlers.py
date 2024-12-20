@@ -140,7 +140,6 @@ async def handle_search_query(message: types.Message, state: FSMContext):
     logger.info(f"Получено сообщение от пользователя {user_id}: {query}")
     
     try:
-        # Получаем список ID патентов в зависимости от метода поиска
         if method == "semantic":
             patents = search_patents_similar(query)
         else:
@@ -149,7 +148,6 @@ async def handle_search_query(message: types.Message, state: FSMContext):
         if patents and len(patents) > 0:
             await message.answer("🔍 *Найденные патенты:*", parse_mode="Markdown")
             
-            # Получаем и отправляем детальную информацию по каждому патенту
             for i, patent in enumerate(patents[:10], start=1):
                 patent_id = patent.get('id')
                 if not patent_id:
@@ -157,7 +155,9 @@ async def handle_search_query(message: types.Message, state: FSMContext):
                     
                 try:
                     details = get_patent_details(patent_id)
-                    response = (
+                    
+                    # Основная информация о патенте
+                    main_info = (
                         f"*Патент #{i}*\n\n"
                         f"📑 *Название:* {details.title}\n"
                         f"📅 *Дата публикации:* {details.publication_date}\n"
@@ -165,9 +165,22 @@ async def handle_search_query(message: types.Message, state: FSMContext):
                         f"👤 *Авторы:* {', '.join(details.authors)}\n"
                         f"💼 *Патентообладатели:* {', '.join(details.patent_holders)}\n"
                         f"🔰 *МПК:* {', '.join(details.ipc_codes)}\n\n"
-                        f"📝 *Реферат:*\n{details.abstract[:1000]}..."
+                        f"📝 *Реферат:*\n{details.abstract}\n\n"
+                        f"📋 *Формула изобретения:*\n{details.claims}\n\n"
+                        f"📚 *Описание:*\n{details.description}"
                     )
-                    await message.answer(response, parse_mode="Markdown")
+                    
+                    # Если текст превышает максимальную длину
+                    max_length = 4096
+                    if len(main_info) > max_length:
+                        # Отправляем текст частями
+                        for i in range(0, len(main_info), max_length):
+                            chunk = main_info[i:i + max_length]
+                            await message.answer(chunk, parse_mode="Markdown")
+                    else:
+                        # Отправляем всё одним сообщением
+                        await message.answer(main_info, parse_mode="Markdown")
+                        
                 except Exception as e:
                     logger.error(f"Ошибка при получении деталей патента {patent_id}: {e}")
                     continue

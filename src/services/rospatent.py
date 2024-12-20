@@ -2,9 +2,10 @@
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -15,6 +16,22 @@ logger = logging.getLogger(__name__)
 API_URL_SIMILAR_SEARCH = "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/similar_search"
 API_URL_SEARCH = "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search"
 
+def clean_text(text: Optional[str]) -> str:
+    """Очищает текст от XML и HTML тегов"""
+    if not text:
+        return ""
+        
+    # Удаляем XML и HTML теги
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Удаляем множественные пробелы и переносы строк
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Удаляем пробелы в начале и конце
+    text = text.strip()
+    
+    return text
+
 @dataclass
 class PatentDetails:
     id: str
@@ -23,9 +40,35 @@ class PatentDetails:
     application_date: str
     authors: list[str]
     patent_holders: list[str]
-    abstract: str
     ipc_codes: list[str]
+    abstract: str
+    claims: str
+    description: str
     
+    @classmethod
+    def from_json(cls, data: dict, patent_id: str) -> 'PatentDetails':
+        """Создает объект PatentDetails из JSON данных"""
+        # Извлекаем нужные поля
+        common = data.get("common", {})
+        biblio_ru = data.get("biblio", {}).get("ru", {})
+        abstract_ru = clean_text(data.get('abstract', {}).get('ru', ''))
+        claims_ru = clean_text(data.get('claims', {}).get('ru', ''))
+        description_ru = clean_text(data.get('description', {}).get('ru', ''))
+        
+        # Формируем объект с деталями патента
+        return cls(
+            id=patent_id,
+            title=biblio_ru.get("title", "Название не указано"),
+            publication_date=common.get("publication_date", "Дата публикации не указана"),
+            application_date=common.get("application", {}).get("filing_date", "Дата заявки не указана"),
+            authors=[author.get("name", "") for author in biblio_ru.get("inventor", [])],
+            patent_holders=[holder.get("name", "") for holder in biblio_ru.get("patentee", [])],
+            ipc_codes=[ipc.get("fullname", "") for ipc in common.get("classification", {}).get("ipc", [])],
+            abstract=abstract_ru,
+            claims=claims_ru,
+            description=description_ru
+        )
+
 def get_patent_details(patent_id: str) -> PatentDetails:
     """Получение детальной информации о патенте по его ID"""
     url = f"https://searchplatform.rospatent.gov.ru/patsearch/v0.2/docs/{patent_id}"
@@ -44,31 +87,7 @@ def get_patent_details(patent_id: str) -> PatentDetails:
             formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
             logger.debug(f"Получены данные патента:\n{formatted_json}")
             
-        # Извлекаем нужные поля
-        common = data.get("common", {})
-        biblio_ru = data.get("biblio", {}).get("ru", {})
-        abstract_ru = data.get("abstract", {}).get("ru", "")
-        
-        # Очищаем текст от HTML-тегов
-        if abstract_ru:
-            abstract_ru = abstract_ru.replace("<pat:Abstract>", "").replace("</pat:Abstract>", "")
-            abstract_ru = abstract_ru.replace("<div>", "").replace("</div>", "")
-            abstract_ru = abstract_ru.replace("<p>", "").replace("</p>", "")
-            
-        # Формируем объект с деталями патента
-        details = PatentDetails(
-            id=patent_id,
-            title=biblio_ru.get("title", "Название не указано"),
-            publication_date=common.get("publication_date", "Дата публикации не указана"),
-            application_date=common.get("application", {}).get("filing_date", "Дата заявки не указана"),
-            authors=[author.get("name", "") for author in biblio_ru.get("inventor", [])],
-            patent_holders=[holder.get("name", "") for holder in biblio_ru.get("patentee", [])],
-            abstract=abstract_ru,
-            ipc_codes=[ipc.get("fullname", "") for ipc in common.get("classification", {}).get("ipc", [])]
-        )
-        
-        logger.info(f"Успешно получены детали патента {patent_id}")
-        return details
+        return PatentDetails.from_json(data, patent_id)
         
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка при получении деталей патента {patent_id}: {e}")
