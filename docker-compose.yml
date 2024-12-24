@@ -9,3 +9,12 @@ services:
       - .env
     volumes:
       - .:/app 
+
+  tests:
+    build: .
+    container_name: telegram_bot_tests
+    env_file:
+      - .env
+    volumes:
+      - .:/app 
+    command: pytest --cov=src --cov-report=xml --cov-report=term-missing tests/ 
