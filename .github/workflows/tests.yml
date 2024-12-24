@@ -21,12 +21,12 @@ jobs:
 
     - name: Install Docker Compose
       run: |
-        sudo apt-get update
-        sudo apt-get install -y docker-compose-plugin
-        docker compose version
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        docker-compose version
 
     - name: Build and run tests
-      run: docker compose run tests
+      run: docker-compose run tests
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
