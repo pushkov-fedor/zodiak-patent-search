@@ -19,9 +19,14 @@ jobs:
         echo "ROSPATENT_JWT=${{ secrets.ROSPATENT_JWT }}" >> .env
         echo "LOG_LEVEL=DEBUG" >> .env
 
-    - name: Build and run tests
+    - name: Install Docker Compose
       run: |
-        docker-compose run tests
+        sudo apt-get update
+        sudo apt-get install -y docker-compose-plugin
+        docker compose version
+
+    - name: Build and run tests
+      run: docker compose run tests
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
