@@ -1,9 +1,5 @@
 # src/interfaces/telegram/states/__init__.py
 
-from aiogram.fsm.state import State, StatesGroup
+from .search import SearchStates
 
-
-class SearchStates(StatesGroup):
-    """Состояния для процесса поиска патентов"""
-    choosing_method = State()  # Выбор метода поиска
-    waiting_for_query = State()  # Ожидание поискового запроса
+__all__ = ['SearchStates']
