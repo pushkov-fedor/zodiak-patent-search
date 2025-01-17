@@ -9,7 +9,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from src.application.services.patent_summarizer import PatentSummarizer
 from src.application.use_cases.patent_search import PatentSearchUseCase
 from src.infrastructure.cache.patent_cache import PatentCache
-from src.interfaces.telegram.handlers.search import SearchHandler, router
+from src.interfaces.telegram.handlers.filters import router as filters_router
+from src.interfaces.telegram.handlers.search import SearchHandler
+from src.interfaces.telegram.handlers.search import router as search_router
 
 
 class PatentBot:
@@ -41,7 +43,10 @@ class PatentBot:
             patent_summarizer=patent_summarizer,
             patent_cache=patent_cache
         )
-        self.dp.include_router(router)
+        
+        # Подключаем все роутеры
+        self.dp.include_router(search_router)
+        self.dp.include_router(filters_router)
 
     async def start(self) -> None:
         """Запуск бота"""

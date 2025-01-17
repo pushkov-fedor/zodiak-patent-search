@@ -8,6 +8,7 @@ import aiohttp
 from aiohttp import ClientTimeout
 
 from src.domain.entities.patent import Patent
+from src.domain.entities.search_filter import SearchFilter
 from src.domain.repositories.patent_repository import PatentRepository
 from src.infrastructure.rospatent.config import RospatentConfig
 from src.infrastructure.utils.text import clean_text
@@ -22,11 +23,15 @@ class RospatentRepository(PatentRepository):
         self.config = config
         self.timeout = ClientTimeout(total=config.timeout)
 
-    async def search_by_query(self, query: str, limit: int = 10) -> List[Patent]:
+    async def search_by_query(self, query: str, limit: int = 10, search_filter: Optional[SearchFilter] = None) -> List[Patent]:
         """Поиск патентов по запросу"""
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             url = f"{self.config.base_url}/search"
             payload = {"qn": query, "limit": limit}
+            
+            # Добавляем фильтры в запрос, если они есть
+            if search_filter:
+                payload["filter"] = search_filter.to_api_format()
 
             try:
                 async with session.post(url, json=payload, headers=self.config.headers) as response:

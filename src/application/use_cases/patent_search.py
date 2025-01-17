@@ -1,9 +1,10 @@
 # src/application/use_cases/patent_search.py
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from src.domain.entities.patent import Patent
+from src.domain.entities.search_filter import SearchFilter
 from src.domain.repositories.patent_repository import PatentRepository
 
 
@@ -21,9 +22,18 @@ class PatentSearchUseCase:
     def __init__(self, patent_repository: PatentRepository):
         self.patent_repository = patent_repository
 
-    async def search_by_query(self, query: str, limit: int = 4) -> PatentSearchResult:
+    async def search_by_query(
+        self, 
+        query: str, 
+        limit: int = 4,
+        search_filter: Optional[SearchFilter] = None
+    ) -> PatentSearchResult:
         """Поиск патентов по запросу"""
-        patents = await self.patent_repository.search_by_query(query, limit)
+        patents = await self.patent_repository.search_by_query(
+            query, 
+            limit,
+            search_filter
+        )
         return PatentSearchResult(
             patents=patents,
             total_count=len(patents),
