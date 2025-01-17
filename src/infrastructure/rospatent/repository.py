@@ -1,13 +1,14 @@
 # src/infrastructure/rospatent/repository.py
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 import aiohttp
 from aiohttp import ClientTimeout
 
 from src.domain.entities.patent import Patent
+from src.domain.entities.search_filter import SearchFilter
 from src.domain.repositories.patent_repository import PatentRepository
 from src.infrastructure.rospatent.config import RospatentConfig
 from src.infrastructure.utils.text import clean_text
@@ -22,11 +23,15 @@ class RospatentRepository(PatentRepository):
         self.config = config
         self.timeout = ClientTimeout(total=config.timeout)
 
-    async def search_by_query(self, query: str, limit: int = 10) -> List[Patent]:
+    async def search_by_query(self, query: str, limit: int = 10, search_filter: Optional[SearchFilter] = None) -> List[Patent]:
         """Поиск патентов по запросу"""
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             url = f"{self.config.base_url}/search"
             payload = {"qn": query, "limit": limit}
+            
+            # Добавляем фильтры в запрос, если они есть
+            if search_filter:
+                payload["filter"] = search_filter.to_api_format()
 
             try:
                 async with session.post(url, json=payload, headers=self.config.headers) as response:
@@ -95,19 +100,42 @@ class RospatentRepository(PatentRepository):
         common = data.get("common", {})
         biblio_ru = data.get("biblio", {}).get("ru", {})
         
-        def parse_date(date_str: str) -> datetime:
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                return datetime.now().date()
+        def parse_date(date_str: str) -> Optional[date]:
+            if not date_str:
+                logger.debug(f"Empty date string for patent {patent_id}")
+                return None
+            
+            date_formats = [
+                "%Y-%m-%d",  # формат YYYY-MM-DD
+                "%Y%m%d",    # формат YYYYMMDD
+                "%Y.%m.%d"   # формат YYYY.MM.DD
+            ]
+            
+            for date_format in date_formats:
+                try:
+                    return datetime.strptime(date_str, date_format).date()
+                except ValueError:
+                    continue
+                
+            logger.error(f"Failed to parse date '{date_str}' for patent {patent_id}")
+            return None
+
+        pub_date = parse_date(common.get("publication_date", ""))
+        app_date = parse_date(
+            common.get("application", {}).get("filing_date", "")
+        )
+
+        if not pub_date or not app_date:
+            logger.warning(
+                f"Missing dates for patent {patent_id}. "
+                f"Publication date: {pub_date}, Application date: {app_date}"
+            )
 
         return Patent.create(
             id=patent_id,
             title=clean_text(biblio_ru.get("title", "Название не указано")),
-            publication_date=parse_date(common.get("publication_date", "")),
-            application_date=parse_date(
-                common.get("application", {}).get("filing_date", "")
-            ),
+            publication_date=pub_date,
+            application_date=app_date,
             authors=[
                 clean_text(author.get("name", ""))
                 for author in biblio_ru.get("inventor", [])

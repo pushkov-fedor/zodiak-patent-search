@@ -6,8 +6,12 @@ from typing import Optional
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from src.application.services.patent_summarizer import PatentSummarizer
 from src.application.use_cases.patent_search import PatentSearchUseCase
-from src.interfaces.telegram.handlers.search import SearchHandler, router
+from src.infrastructure.cache.patent_cache import PatentCache
+from src.interfaces.telegram.handlers.filters import router as filters_router
+from src.interfaces.telegram.handlers.search import SearchHandler
+from src.interfaces.telegram.handlers.search import router as search_router
 
 
 class PatentBot:
@@ -17,6 +21,8 @@ class PatentBot:
         self,
         token: str,
         search_use_case: PatentSearchUseCase,
+        patent_summarizer: PatentSummarizer,
+        patent_cache: PatentCache,
         log_level: Optional[int] = None
     ):
         # Настройка логирования
@@ -32,8 +38,15 @@ class PatentBot:
         self.dp = Dispatcher(storage=self.storage)
 
         # Инициализация обработчиков
-        self.search_handler = SearchHandler(search_use_case)
-        self.dp.include_router(router)
+        self.search_handler = SearchHandler(
+            search_use_case=search_use_case,
+            patent_summarizer=patent_summarizer,
+            patent_cache=patent_cache
+        )
+        
+        # Подключаем все роутеры
+        self.dp.include_router(search_router)
+        self.dp.include_router(filters_router)
 
     async def start(self) -> None:
         """Запуск бота"""

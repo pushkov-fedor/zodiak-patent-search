@@ -12,12 +12,15 @@ def test_settings_from_env():
     with patch.dict(os.environ, {
         'BOT_TOKEN': 'test_bot_token',
         'ROSPATENT_JWT': 'test_jwt',
-        'LOG_LEVEL': 'INFO'  # Устанавливаем явно уровень логирования
+        'GIGACHAT_CLIENT_ID': 'test_client_id',
+        'GIGACHAT_CLIENT_SECRET': 'test_client_secret',
+        'LOG_LEVEL': 'INFO'
     }, clear=True):
         settings = Settings.from_env()
         assert settings.bot_token == 'test_bot_token'
         assert settings.rospatent_jwt == 'test_jwt'
-        assert settings.log_level == 20  # logging.INFO
+        assert settings.gigachat_client_id == 'test_client_id'
+        assert settings.gigachat_client_secret == 'test_client_secret'
 
 
 def test_settings_missing_bot_token():

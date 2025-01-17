@@ -1,17 +1,24 @@
 # src/interfaces/telegram/handlers/search.py
 
 import logging
-from typing import Any
+from typing import Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from src.application.services.patent_summarizer import PatentSummarizer
 from src.application.use_cases.patent_search import PatentSearchUseCase
+from src.domain.entities.search_filter import SearchFilter
+from src.infrastructure.cache.patent_cache import PatentCache
 from src.infrastructure.utils.text import count_words
-from src.interfaces.telegram.keyboards import create_main_keyboard
-from src.interfaces.telegram.states import SearchStates
+from src.interfaces.telegram.keyboards.filters import create_filter_keyboard
+from src.interfaces.telegram.keyboards.main import (
+    create_exact_search_keyboard,
+    create_main_keyboard,
+)
+from src.interfaces.telegram.states.search import SearchStates
 from src.interfaces.telegram.utils.formatters import format_patent_message
 
 logger = logging.getLogger(__name__)
@@ -22,14 +29,23 @@ router = Router()
 class SearchHandler:
     """Обработчик поисковых запросов"""
 
-    def __init__(self, search_use_case: PatentSearchUseCase):
+    def __init__(
+        self,
+        search_use_case: PatentSearchUseCase,
+        patent_summarizer: PatentSummarizer,
+        patent_cache: PatentCache
+    ):
         self.search_use_case = search_use_case
+        self.patent_summarizer = patent_summarizer
+        self.patent_cache = patent_cache
         self._register_handlers()
 
     def _register_handlers(self) -> None:
         """Регистрация обработчиков"""
         router.message.register(self.cmd_start, Command("start"))
         router.message.register(self.cmd_help, Command("help"))
+        
+        # Регистрируем обработчики кнопок
         router.message.register(
             self.process_search_similar,
             F.text == "🔍 Семантический поиск"
@@ -37,6 +53,18 @@ class SearchHandler:
         router.message.register(
             self.process_search_exact,
             F.text == "🎯 Точный поиск"
+        )
+        router.message.register(
+            self.process_filters_button,
+            F.text == "⚙️ Настроить фильтры"
+        )
+        router.message.register(
+            self.process_show_filters,
+            F.text == "👁 Текущие фильтры"
+        )
+        router.message.register(
+            self.process_return_to_main,
+            F.text == "🔄 Вернуться в главное меню"
         )
         router.message.register(
             self.process_help_button,
@@ -91,13 +119,65 @@ class SearchHandler:
         state: FSMContext
     ) -> None:
         """Обработка выбора точного поиска"""
+        await state.update_data(search_method="exact")
+        
+        # Отправляем основное сообщение с инструкциями
         await message.answer(
-            "🎯 *Точный поиск* выбран.\nВведите ваш поисковый запрос.",
+            "🎯 *Точный поиск* выбран.\n\n"
+            "Введите поисковый запрос или воспользуйтесь дополнительными опциями:",
             parse_mode="Markdown",
+            reply_markup=create_exact_search_keyboard()
+        )
+        
+        await state.set_state(SearchStates.waiting_for_query)
+
+    async def process_filters_button(
+        self,
+        message: Message,
+        state: FSMContext
+    ) -> None:
+        """Обработка нажатия кнопки настройки фильтров"""
+        data = await state.get_data()
+        if data.get('search_method') != "exact":
+            return
+            
+        await message.answer(
+            "⚙️ Настройка фильтров поиска:",
+            reply_markup=create_filter_keyboard()
+        )
+        await state.set_state(SearchStates.confirming_filters)
+
+    async def process_show_filters(
+        self,
+        message: Message,
+        state: FSMContext
+    ) -> None:
+        """Обработка нажатия кнопки просмотра текущих фильтров"""
+        data = await state.get_data()
+        if data.get('search_method') != "exact":
+            return
+            
+        search_filter = self._create_search_filter(data)
+        filter_info = self._format_filter_info(search_filter)
+        
+        await message.answer(
+            f"🔍 <b>Текущие настройки поиска:</b>\n\n{filter_info}",
+            parse_mode="HTML",
+            reply_markup=create_exact_search_keyboard()
+        )
+
+    async def process_return_to_main(
+        self,
+        message: Message,
+        state: FSMContext
+    ) -> None:
+        """Обработка возврата в главное меню"""
+        await state.clear()
+        await message.answer(
+            "Выберите режим поиска:",
             reply_markup=create_main_keyboard()
         )
-        await state.update_data(search_method="exact")
-        await state.set_state(SearchStates.waiting_for_query)
+        await state.set_state(SearchStates.choosing_method)
 
     async def process_help_button(self, message: Message) -> None:
         """Обработка нажатия кнопки помощи"""
@@ -109,6 +189,14 @@ class SearchHandler:
         state: FSMContext
     ) -> None:
         """Обработка поискового запроса"""
+        # Пропускаем обработку специальных команд
+        if message.text.startswith('/') or message.text in [
+            "⚙️ Настроить фильтры",
+            "👁 Текущие фильтры",
+            "🔄 Вернуться в главное меню"
+        ]:
+            return
+
         data = await state.get_data()
         method = data.get('search_method')
         query = message.text
@@ -125,54 +213,113 @@ class SearchHandler:
 
         # Отправляем сообщение о начале поиска
         await message.answer(
-            "🔍 <b>Идет поиск, подождите немного...</b>",
+            "🔍 <b>Идет поиск и анализ патентов, подождите немного...</b>",
             parse_mode="HTML"
         )
 
         try:
+            # Создаем объект фильтра из сохраненных данных
+            search_filter = self._create_search_filter(data)
+
             if method == "semantic":
                 result = await self.search_use_case.search_similar(query)
             else:
-                result = await self.search_use_case.search_by_query(query)
+                result = await self.search_use_case.search_by_query(
+                    query,
+                    search_filter=search_filter
+                )
 
             if result.patents:
+                # Формируем сообщение с примененными фильтрами
+                filter_info = self._format_filter_info(search_filter)
                 await message.answer(
-                    f"✨ <b>Найдено патентов:</b> {result.total_count}",
+                    f"✨ <b>Найдено патентов:</b> {result.total_count}\n\n"
+                    f"{filter_info}",
                     parse_mode="HTML"
                 )
 
-                for i, patent in enumerate(result.patents[:10], 1):
-                    try:
-                        # Получаем части сообщения для патента
-                        message_parts = format_patent_message(patent, i)
-                        
-                        # Отправляем каждую часть
-                        for part in message_parts:
-                            await message.answer(part, parse_mode="HTML")
-                    except Exception as e:
-                        logger.error(f"Ошибка при отправке информации о патенте {patent.id}: {e}")
-                        continue
+                # Анализируем каждый найденный патент
+                for index, patent in enumerate(result.patents, 1):
+                    # Получаем анализ
+                    analysis = await self.patent_summarizer.analyze_patent(
+                        patent.id,
+                        patent.get_full_text()
+                    )
+                    
+                    # Форматируем сообщение с учетом анализа
+                    messages = format_patent_message(
+                        patent=patent,
+                        index=index,
+                        summary={"status": "success", "summary": analysis} if analysis else None
+                    )
+                    
+                    # Отправляем каждую часть сообщения
+                    for msg in messages:
+                        await message.answer(msg, parse_mode="HTML")
 
             else:
                 await message.answer(
-                    "❌ Патенты не найдены. Попробуйте изменить запрос.",
+                    "❌ Патенты не найдены. Попробуйте изменить запрос или фильтры.",
                     reply_markup=create_main_keyboard()
                 )
 
         except Exception as e:
-            logger.error(f"Ошибка при поиске: {e}")
+            logger.error(f"Ошибка при обработке запроса: {e}")
             await message.answer(
-                "⚠️ Произошла ошибка при обработке запроса. "
-                "Пожалуйста, попробуйте позже.",
-                reply_markup=create_main_keyboard()
+                "❌ Произошла ошибка при обработке запроса"
             )
 
-        # В конце поиска отправляем сообщение о возможности нового запроса
+        # В конце поиска возвращаем соответствующую клавиатуру
+        data = await state.get_data()
+        keyboard = (
+            create_exact_search_keyboard()
+            if data.get('search_method') == "exact"
+            else create_main_keyboard()
+        )
+        
         await message.answer(
-            "✍️ Введите новый запрос или выберите другой режим поиска:",
-            reply_markup=create_main_keyboard(),
+            "✍️ Введите новый запрос или выберите другое действие:",
+            reply_markup=keyboard,
             parse_mode="HTML"
         )
         
         # Сохраняем состояние для следующего запроса
         await state.set_state(SearchStates.waiting_for_query)
+
+    def _create_search_filter(self, data: dict) -> Optional[SearchFilter]:
+        """Создание объекта SearchFilter из данных состояния"""
+        if not any([
+            data.get('countries'),
+            data.get('ipc_codes'),
+            data.get('cpc_codes'),
+            data.get('date_from'),
+            data.get('date_to')
+        ]):
+            return None
+
+        return SearchFilter(
+            countries=data.get('countries'),
+            ipc_codes=data.get('ipc_codes'),
+            cpc_codes=data.get('cpc_codes'),
+            date_from=data.get('date_from'),
+            date_to=data.get('date_to')
+        )
+
+    def _format_filter_info(self, search_filter: Optional[SearchFilter]) -> str:
+        """Форматирование информации о примененных фильтрах"""
+        if not search_filter:
+            return "<i>Фильтры не применены</i>"
+
+        filter_info = "<b>Применены фильтры:</b>\n"
+        if search_filter.countries:
+            filter_info += f"🌍 Страны: {', '.join(search_filter.countries)}\n"
+        if search_filter.ipc_codes:
+            filter_info += f"📑 МПК: {', '.join(search_filter.ipc_codes)}\n"
+        if search_filter.cpc_codes:
+            filter_info += f"📋 СПК: {', '.join(search_filter.cpc_codes)}\n"
+        if search_filter.date_from:
+            filter_info += f"📅 С: {search_filter.date_from.strftime('%d.%m.%Y')}\n"
+        if search_filter.date_to:
+            filter_info += f"📅 По: {search_filter.date_to.strftime('%d.%m.%Y')}\n"
+        
+        return filter_info
