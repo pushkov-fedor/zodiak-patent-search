@@ -10,8 +10,8 @@ class Patent:
     """Доменная модель патента"""
     id: str
     title: str
-    publication_date: date
-    application_date: date
+    publication_date: Optional[date]
+    application_date: Optional[date]
     authors: List[str]
     patent_holders: List[str]
     ipc_codes: List[str]

@@ -12,6 +12,15 @@ def truncate_text(text: str, max_length: int = 4000) -> str:
 
 def format_patent_message(patent: Any, index: int, summary: Optional[dict] = None) -> List[str]:
     """Форматирование сообщения с информацией о патенте"""
+    # Форматируем даты
+    pub_date = "Не указана"
+    if patent.publication_date:
+        pub_date = patent.publication_date.strftime("%d.%m.%Y")
+        
+    app_date = "Не указана"
+    if patent.application_date:
+        app_date = patent.application_date.strftime("%d.%m.%Y")
+    
     # Формируем ссылку на патент
     patent_link = f"https://searchplatform.rospatent.gov.ru/doc/{patent.id}"
     
@@ -21,8 +30,8 @@ def format_patent_message(patent: Any, index: int, summary: Optional[dict] = Non
         f"📑 <b>Номер патента:</b> {patent.id}\n"
         f"🔗 <b>Ссылка:</b> {patent_link}\n"
         f"📑 <b>Название:</b> {patent.title}\n"
-        f"📅 <b>Дата публикации:</b> {patent.publication_date}\n"
-        f"📅 <b>Дата подачи заявки:</b> {patent.application_date}\n"
+        f"📅 <b>Дата публикации:</b> {pub_date}\n"
+        f"📅 <b>Дата подачи заявки:</b> {app_date}\n"
         f"👤 <b>Авторы:</b> {', '.join(patent.authors)}\n"
         f"💼 <b>Патентообладатели:</b> {', '.join(patent.patent_holders)}\n"
         f"🔰 <b>МПК:</b> {', '.join(patent.ipc_codes)}"

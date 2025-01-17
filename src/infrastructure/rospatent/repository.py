@@ -1,7 +1,7 @@
 # src/infrastructure/rospatent/repository.py
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 import aiohttp
@@ -100,19 +100,42 @@ class RospatentRepository(PatentRepository):
         common = data.get("common", {})
         biblio_ru = data.get("biblio", {}).get("ru", {})
         
-        def parse_date(date_str: str) -> datetime:
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                return datetime.now().date()
+        def parse_date(date_str: str) -> Optional[date]:
+            if not date_str:
+                logger.debug(f"Empty date string for patent {patent_id}")
+                return None
+            
+            date_formats = [
+                "%Y-%m-%d",  # формат YYYY-MM-DD
+                "%Y%m%d",    # формат YYYYMMDD
+                "%Y.%m.%d"   # формат YYYY.MM.DD
+            ]
+            
+            for date_format in date_formats:
+                try:
+                    return datetime.strptime(date_str, date_format).date()
+                except ValueError:
+                    continue
+                
+            logger.error(f"Failed to parse date '{date_str}' for patent {patent_id}")
+            return None
+
+        pub_date = parse_date(common.get("publication_date", ""))
+        app_date = parse_date(
+            common.get("application", {}).get("filing_date", "")
+        )
+
+        if not pub_date or not app_date:
+            logger.warning(
+                f"Missing dates for patent {patent_id}. "
+                f"Publication date: {pub_date}, Application date: {app_date}"
+            )
 
         return Patent.create(
             id=patent_id,
             title=clean_text(biblio_ru.get("title", "Название не указано")),
-            publication_date=parse_date(common.get("publication_date", "")),
-            application_date=parse_date(
-                common.get("application", {}).get("filing_date", "")
-            ),
+            publication_date=pub_date,
+            application_date=app_date,
             authors=[
                 clean_text(author.get("name", ""))
                 for author in biblio_ru.get("inventor", [])
