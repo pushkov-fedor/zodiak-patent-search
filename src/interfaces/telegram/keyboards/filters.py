@@ -1,9 +1,4 @@
-from aiogram.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-)
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def create_filter_keyboard() -> InlineKeyboardMarkup:
@@ -19,17 +14,10 @@ def create_filter_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📅 Период", callback_data="filter_dates")
             ],
             [
-                InlineKeyboardButton(text="✅ Применить фильтры", callback_data="apply_filters"),
                 InlineKeyboardButton(text="❌ Сбросить фильтры", callback_data="reset_filters")
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Вернуться к поиску", callback_data="return_to_search")
             ]
         ]
-    )
-
-
-def create_skip_keyboard() -> ReplyKeyboardMarkup:
-    """Создание клавиатуры с кнопкой пропуска"""
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="⏭️ Пропустить")]],
-        resize_keyboard=True,
-        one_time_keyboard=True
     ) 

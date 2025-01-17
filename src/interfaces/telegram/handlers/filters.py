@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional
 
 from aiogram import F, Router
@@ -8,10 +8,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.domain.entities.search_filter import SearchFilter
-from src.interfaces.telegram.keyboards.filters import (
-    create_filter_keyboard,
-    create_skip_keyboard,
-)
+from src.interfaces.telegram.keyboards.filters import create_filter_keyboard
+from src.interfaces.telegram.keyboards.main import create_exact_search_keyboard
 from src.interfaces.telegram.states.search import SearchStates
 
 logger = logging.getLogger(__name__)
@@ -63,48 +61,68 @@ async def process_dates_setting(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchStates.setting_date_from)
 
 
+@router.callback_query(F.data == "return_to_search")
+async def return_to_search(callback: CallbackQuery, state: FSMContext):
+    """Возврат к поиску"""
+    await callback.message.delete()  # Удаляем сообщение с фильтрами
+    await callback.message.answer(
+        "✅ Можете продолжить поиск с текущими фильтрами",
+        reply_markup=create_exact_search_keyboard()
+    )
+    await state.set_state(SearchStates.waiting_for_query)
+
+
+@router.message(F.text == "🔄 Вернуться к поиску")
+async def handle_return_to_search(message: Message, state: FSMContext):
+    """Обработка кнопки возврата к поиску"""
+    await message.answer(
+        "✅ Можете продолжить поиск с текущими фильтрами",
+        reply_markup=create_exact_search_keyboard()
+    )
+    await state.set_state(SearchStates.waiting_for_query)
+
+
 @router.message(SearchStates.setting_countries)
 async def handle_countries_input(message: Message, state: FSMContext):
     """Обработка ввода стран"""
-    if message.text == "⏭️ Пропустить":
-        await state.update_data(countries=None)
-    else:
-        countries = [c.strip().upper() for c in message.text.split(",")]
-        await state.update_data(countries=countries)
-    
+    if message.text == "🔄 Вернуться к поиску":
+        await handle_return_to_search(message, state)
+        return
+
+    countries = [c.strip().upper() for c in message.text.split(",")]
+    await state.update_data(countries=countries)
     await show_current_filters(message, state)
 
 
 @router.message(SearchStates.setting_ipc_codes)
 async def handle_ipc_input(message: Message, state: FSMContext):
     """Обработка ввода кодов МПК"""
-    if message.text == "⏭️ Пропустить":
-        await state.update_data(ipc_codes=None)
-    else:
-        ipc_codes = [code.strip().upper() for code in message.text.split(",")]
-        await state.update_data(ipc_codes=ipc_codes)
-    
+    if message.text == "🔄 Вернуться к поиску":
+        await handle_return_to_search(message, state)
+        return
+
+    ipc_codes = [code.strip().upper() for code in message.text.split(",")]
+    await state.update_data(ipc_codes=ipc_codes)
     await show_current_filters(message, state)
 
 
 @router.message(SearchStates.setting_cpc_codes)
 async def handle_cpc_input(message: Message, state: FSMContext):
     """Обработка ввода кодов СПК"""
-    if message.text == "⏭️ Пропустить":
-        await state.update_data(cpc_codes=None)
-    else:
-        cpc_codes = [code.strip().upper() for code in message.text.split(",")]
-        await state.update_data(cpc_codes=cpc_codes)
-    
+    if message.text == "🔄 Вернуться к поиску":
+        await handle_return_to_search(message, state)
+        return
+
+    cpc_codes = [code.strip().upper() for code in message.text.split(",")]
+    await state.update_data(cpc_codes=cpc_codes)
     await show_current_filters(message, state)
 
 
 @router.message(SearchStates.setting_date_from)
 async def handle_date_from_input(message: Message, state: FSMContext):
     """Обработка ввода глубины поиска"""
-    if message.text == "⏭️ Пропустить":
-        await state.update_data(date_from=None)
-        await show_current_filters(message, state)
+    if message.text == "🔄 Вернуться к поиску":
+        await handle_return_to_search(message, state)
         return
 
     try:
@@ -121,7 +139,7 @@ async def handle_date_from_input(message: Message, state: FSMContext):
     except ValueError:
         await message.answer(
             "❌ Неверный формат. Введите число от 1 до 30.",
-            reply_markup=create_skip_keyboard()
+            reply_markup=create_exact_search_keyboard()
         )
 
 
@@ -179,6 +197,6 @@ async def apply_filters(callback: CallbackQuery, state: FSMContext):
     """Применение фильтров и переход к поиску"""
     await callback.message.answer(
         "✅ Фильтры установлены. Теперь введите поисковый запрос:",
-        reply_markup=create_skip_keyboard()
+        reply_markup=create_exact_search_keyboard()
     )
     await state.set_state(SearchStates.waiting_for_query) 
