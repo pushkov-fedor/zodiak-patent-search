@@ -1,6 +1,6 @@
 # src/interfaces/telegram/utils/formatters.py
 
-from typing import Any, List
+from typing import Any, List, Optional
 
 
 def truncate_text(text: str, max_length: int = 4000) -> str:
@@ -10,7 +10,7 @@ def truncate_text(text: str, max_length: int = 4000) -> str:
     return text[:max_length] + "...\n\n<i>Полный текст доступен по ссылке на патент</i>"
 
 
-def format_patent_message(patent: Any, index: int) -> List[str]:
+def format_patent_message(patent: Any, index: int, summary: Optional[dict] = None) -> List[str]:
     """Форматирование сообщения с информацией о патенте"""
     # Формируем ссылку на патент
     patent_link = f"https://searchplatform.rospatent.gov.ru/doc/{patent.id}"
@@ -25,17 +25,20 @@ def format_patent_message(patent: Any, index: int) -> List[str]:
         f"📅 <b>Дата подачи заявки:</b> {patent.application_date}\n"
         f"👤 <b>Авторы:</b> {', '.join(patent.authors)}\n"
         f"💼 <b>Патентообладатели:</b> {', '.join(patent.patent_holders)}\n"
-        f"🔰 <b>МПК:</b> {', '.join(patent.ipc_codes)}\n\n"
-        f"📝 <b>Реферат:</b>\n{patent.abstract}"
+        f"🔰 <b>МПК:</b> {', '.join(patent.ipc_codes)}"
     )
 
-    # Формируем остальные части с учетом максимального размера сообщения
     parts = [main_info]
-    
-    if patent.claims:
-        parts.append(f"📋 <b>Формула изобретения:</b>\n{truncate_text(patent.claims)}")
-        
-    if patent.description:
-        parts.append(f"📚 <b>Описание:</b>\n{truncate_text(patent.description)}")
 
-    return parts[:4]  # Максимум 4 сообщения на патент
+    # Добавляем суммаризацию от GigaChat, если она есть
+    if summary and summary.get("status") == "success":
+        parts.append(f"🤖 <b>Анализ:</b>\n{summary['summary']}")
+    else:
+        # Если нет суммаризации, добавляем стандартную информацию
+        if patent.abstract:
+            parts.append(f"📝 <b>Реферат:</b>\n{truncate_text(patent.abstract)}")
+        
+        if patent.claims:
+            parts.append(f"📋 <b>Формула изобретения:</b>\n{truncate_text(patent.claims)}")
+
+    return parts

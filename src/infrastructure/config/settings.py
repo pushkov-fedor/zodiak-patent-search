@@ -14,12 +14,15 @@ load_dotenv()
 @dataclass
 class Settings:
     """Основные настройки приложения"""
-    # Токены и ключи
+    # Обязательные параметры (без значений по умолчанию)
     bot_token: str
     rospatent_jwt: str
+    gigachat_client_id: str
+    gigachat_client_secret: str
     
-    # Настройки логирования
+    # Необязательные параметры (со значениями по умолчанию)
     log_level: int = logging.INFO
+    cache_ttl_hours: int = 24
     
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -32,13 +35,26 @@ class Settings:
         if not rospatent_jwt:
             raise ValueError("ROSPATENT_JWT is not set in environment variables")
             
+        gigachat_client_id = os.getenv("GIGACHAT_CLIENT_ID")
+        if not gigachat_client_id:
+            raise ValueError("GIGACHAT_CLIENT_ID is not set")
+            
+        gigachat_client_secret = os.getenv("GIGACHAT_CLIENT_SECRET")
+        if not gigachat_client_secret:
+            raise ValueError("GIGACHAT_CLIENT_SECRET is not set")
+            
         log_level_str = os.getenv("LOG_LEVEL", "INFO")
         log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+        
+        cache_ttl = int(os.getenv("CACHE_TTL_HOURS", "24"))
         
         return cls(
             bot_token=bot_token,
             rospatent_jwt=rospatent_jwt,
-            log_level=log_level
+            gigachat_client_id=gigachat_client_id,
+            gigachat_client_secret=gigachat_client_secret,
+            log_level=log_level,
+            cache_ttl_hours=cache_ttl
         )
 
 

@@ -8,7 +8,9 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from src.application.services.patent_summarizer import PatentSummarizer
 from src.application.use_cases.patent_search import PatentSearchUseCase
+from src.infrastructure.cache.patent_cache import PatentCache
 from src.infrastructure.utils.text import count_words
 from src.interfaces.telegram.keyboards import create_main_keyboard
 from src.interfaces.telegram.states import SearchStates
@@ -22,8 +24,15 @@ router = Router()
 class SearchHandler:
     """Обработчик поисковых запросов"""
 
-    def __init__(self, search_use_case: PatentSearchUseCase):
+    def __init__(
+        self,
+        search_use_case: PatentSearchUseCase,
+        patent_summarizer: PatentSummarizer,
+        patent_cache: PatentCache
+    ):
         self.search_use_case = search_use_case
+        self.patent_summarizer = patent_summarizer
+        self.patent_cache = patent_cache
         self._register_handlers()
 
     def _register_handlers(self) -> None:
@@ -125,7 +134,7 @@ class SearchHandler:
 
         # Отправляем сообщение о начале поиска
         await message.answer(
-            "🔍 <b>Идет поиск, подождите немного...</b>",
+            "🔍 <b>Идет поиск и анализ патентов, подождите немного...</b>",
             parse_mode="HTML"
         )
 
@@ -141,17 +150,21 @@ class SearchHandler:
                     parse_mode="HTML"
                 )
 
-                for i, patent in enumerate(result.patents[:10], 1):
-                    try:
-                        # Получаем части сообщения для патента
-                        message_parts = format_patent_message(patent, i)
-                        
-                        # Отправляем каждую часть
-                        for part in message_parts:
-                            await message.answer(part, parse_mode="HTML")
-                    except Exception as e:
-                        logger.error(f"Ошибка при отправке информации о патенте {patent.id}: {e}")
-                        continue
+                # Анализируем каждый найденный патент
+                for index, patent in enumerate(result.patents, 1):
+                    # Получаем анализ
+                    analysis = await self.patent_summarizer.analyze_patent(patent.id, patent.get_full_text())
+                    
+                    # Форматируем сообщение с учетом анализа
+                    messages = format_patent_message(
+                        patent=patent,
+                        index=index,
+                        summary={"status": "success", "summary": analysis} if analysis else None
+                    )
+                    
+                    # Отправляем каждую часть сообщения
+                    for msg in messages:
+                        await message.answer(msg, parse_mode="HTML")
 
             else:
                 await message.answer(
@@ -160,12 +173,8 @@ class SearchHandler:
                 )
 
         except Exception as e:
-            logger.error(f"Ошибка при поиске: {e}")
-            await message.answer(
-                "⚠️ Произошла ошибка при обработке запроса. "
-                "Пожалуйста, попробуйте позже.",
-                reply_markup=create_main_keyboard()
-            )
+            logger.error(f"Ошибка при обработке запроса: {e}")
+            await message.answer("❌ Произошла ошибка при обработке запроса")
 
         # В конце поиска отправляем сообщение о возможности нового запроса
         await message.answer(

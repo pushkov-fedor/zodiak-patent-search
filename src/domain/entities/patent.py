@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -46,3 +46,21 @@ class Patent:
             claims=claims,
             description=description
         )
+
+    def get_full_text(self) -> str:
+        """Возвращает полный текст патента для анализа"""
+        parts = []
+        
+        if self.title:
+            parts.append(f"Название: {self.title}")
+            
+        if self.abstract:
+            parts.append(f"Реферат: {self.abstract}")
+            
+        if self.description:
+            parts.append(f"Описание: {self.description}")
+            
+        if self.claims:
+            parts.append(f"Формула изобретения: {self.claims}")
+            
+        return "\n\n".join(parts)
