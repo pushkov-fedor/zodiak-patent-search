@@ -17,6 +17,8 @@ jobs:
       run: |
         echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
         echo "ROSPATENT_JWT=${{ secrets.ROSPATENT_JWT }}" >> .env
+        echo "GIGACHAT_CLIENT_ID=${{ secrets.GIGACHAT_CLIENT_ID }}" >> .env
+        echo "GIGACHAT_CLIENT_SECRET=${{ secrets.GIGACHAT_CLIENT_SECRET }}" >> .env
         echo "LOG_LEVEL=DEBUG" >> .env
 
     - name: Install Docker Compose
