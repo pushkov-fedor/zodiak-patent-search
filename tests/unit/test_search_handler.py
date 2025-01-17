@@ -1,5 +1,6 @@
 # tests/unit/test_search_handler.py
 
+from datetime import date
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -44,8 +45,8 @@ async def test_handle_search_query_exact(handler):
             Patent(
                 id="123",
                 title="Test Patent",
-                publication_date="2023-01-01",
-                application_date="2022-01-01",
+                publication_date=date(2023, 1, 1),
+                application_date=date(2022, 1, 1),
                 authors=["Author A"],
                 patent_holders=["Holder A"],
                 ipc_codes=["IPC1"],
@@ -56,13 +57,14 @@ async def test_handle_search_query_exact(handler):
         ]
     )
     handler.search_use_case.search_by_query = AsyncMock(return_value=mock_result)
+    handler.patent_summarizer.analyze_patent = AsyncMock(return_value="Test analysis")
 
     # Act
     await handler.handle_search_query(message, state)
 
     # Assert
-    handler.search_use_case.search_by_query.assert_awaited_once_with("Test Query")
-    assert message.answer.await_count == 6
+    handler.search_use_case.search_by_query.assert_awaited_once_with("Test Query", search_filter=None)
+    assert message.answer.await_count == 5  # 1. Начало поиска, 2. Результаты, 3. Патент, 4. Анализ, 5. Новый запрос
     assert state.set_state.await_count == 1
 
     # Проверяем, что все вызовы answer были с правильными параметрами

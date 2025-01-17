@@ -25,7 +25,7 @@ async def test_start_and_close(patent_bot):
 
 
 @pytest.mark.asyncio
-async def test_bot_initialization(mock_search_use_case):
+async def test_bot_initialization(mock_search_use_case, mock_patent_summarizer, mock_patent_cache):
     # Arrange
     token = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 
@@ -34,8 +34,13 @@ async def test_bot_initialization(mock_search_use_case):
         mock_bot.return_value = mock_bot_instance
 
         # Act
-        bot = PatentBot(token=token, search_use_case=mock_search_use_case)
+        bot = PatentBot(
+            token=token, 
+            search_use_case=mock_search_use_case,
+            patent_summarizer=mock_patent_summarizer,
+            patent_cache=mock_patent_cache
+        )
 
         # Assert
         assert isinstance(bot.bot, Bot)
-        assert bot.search_handler.search_use_case == mock_search_use_case  # проверяем use_case в handler
+        assert bot.search_handler.search_use_case == mock_search_use_case

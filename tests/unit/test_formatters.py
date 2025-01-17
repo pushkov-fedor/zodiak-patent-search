@@ -33,23 +33,37 @@ def test_format_patent_message():
         description="Description"
     )
 
+    # Тест без summary (должен вернуть 3 сообщения: основное, реферат и формула)
     messages = format_patent_message(patent, index=1)
-    assert len(messages) == 3  # main_info, claims, description
+    assert len(messages) == 3
 
     main_info = messages[0]
     assert "🔎 <b>Патент #1</b>" in main_info
     assert "📑 <b>Номер патента:</b> 123" in main_info
     assert "🔗 <b>Ссылка:</b> https://searchplatform.rospatent.gov.ru/doc/123" in main_info
     assert "📑 <b>Название:</b> Test Patent" in main_info
-    assert "📅 <b>Дата публикации:</b> 2023-01-01" in main_info
-    assert "📅 <b>Дата подачи заявки:</b> 2022-01-01" in main_info
+    assert "📅 <b>Дата публикации:</b> 01.01.2023" in main_info
+    assert "📅 <b>Дата подачи заявки:</b> 01.01.2022" in main_info
     assert "👤 <b>Авторы:</b> Author A" in main_info
     assert "💼 <b>Патентообладатели:</b> Holder A" in main_info
     assert "🔰 <b>МПК:</b> IPC1" in main_info
-    assert "📝 <b>Реферат:</b>\nAbstract" in main_info
 
-    claims_msg = messages[1]
-    assert "📋 <b>Формула изобретения:</b>\nClaims" in claims_msg
+    assert "📝 <b>Реферат:</b>\nAbstract" in messages[1]
+    assert "📋 <b>Формула изобретения:</b>\nClaims" in messages[2]
 
-    description_msg = messages[2]
-    assert "📚 <b>Описание:</b>\nDescription" in description_msg
+    # Тест с успешным summary (должен вернуть 2 сообщения: основное и анализ)
+    messages_with_summary = format_patent_message(
+        patent, 
+        index=1, 
+        summary={"status": "success", "summary": "Test analysis"}
+    )
+    assert len(messages_with_summary) == 2
+    assert "🤖 <b>Анализ:</b>\nTest analysis" in messages_with_summary[1]
+
+    # Тест с неуспешным summary (должен вернуть 3 сообщения как без summary)
+    messages_with_failed_summary = format_patent_message(
+        patent, 
+        index=1, 
+        summary={"status": "error", "summary": None}
+    )
+    assert len(messages_with_failed_summary) == 3
