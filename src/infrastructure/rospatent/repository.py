@@ -1,6 +1,7 @@
 # src/infrastructure/rospatent/repository.py
 
 import logging
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -23,13 +24,25 @@ class RospatentRepository(PatentRepository):
         self.config = config
         self.timeout = ClientTimeout(total=config.timeout)
 
+    @asynccontextmanager
+    async def _get_session(self):
+        """Контекстный менеджер для создания и закрытия сессии"""
+        # TODO: убрать verify_ssl=False, когда rospatent вернет валидный сертификат
+        session = aiohttp.ClientSession(
+            timeout=self.timeout,
+            connector=aiohttp.TCPConnector(verify_ssl=False)
+        )
+        try:
+            yield session
+        finally:
+            await session.close()
+
     async def search_by_query(self, query: str, limit: int = 10, search_filter: Optional[SearchFilter] = None) -> List[Patent]:
         """Поиск патентов по запросу"""
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with self._get_session() as session:
             url = f"{self.config.base_url}/search"
             payload = {"qn": query, "limit": limit}
             
-            # Добавляем фильтры в запрос, если они есть
             if search_filter:
                 payload["filter"] = search_filter.to_api_format()
 
@@ -42,8 +55,16 @@ class RospatentRepository(PatentRepository):
                     for hit in data.get("hits", []):
                         patent_id = hit.get("id")
                         if patent_id:
-                            if patent := await self.get_by_id(patent_id):
-                                patents.append(patent)
+                            patent_url = f"{self.config.base_url}/docs/{patent_id}"
+                            try:
+                                async with session.get(patent_url, headers=self.config.headers) as patent_response:
+                                    patent_response.raise_for_status()
+                                    patent_data = await patent_response.json()
+                                    if patent := self._parse_patent_data(patent_data, patent_id):
+                                        patents.append(patent)
+                            except aiohttp.ClientError as e:
+                                logger.error(f"Error fetching patent {patent_id}: {e}")
+                                continue
                     
                     return patents
 
@@ -53,7 +74,7 @@ class RospatentRepository(PatentRepository):
 
     async def search_similar(self, text: str, limit: int = 10) -> List[Patent]:
         """Семантический поиск похожих патентов"""
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with self._get_session() as session:
             url = f"{self.config.base_url}/similar_search"
             payload = {
                 "type_search": "text_search",
@@ -70,8 +91,16 @@ class RospatentRepository(PatentRepository):
                     for item in data.get("data", []):
                         patent_id = item.get("id")
                         if patent_id:
-                            if patent := await self.get_by_id(patent_id):
-                                patents.append(patent)
+                            patent_url = f"{self.config.base_url}/docs/{patent_id}"
+                            try:
+                                async with session.get(patent_url, headers=self.config.headers) as patent_response:
+                                    patent_response.raise_for_status()
+                                    patent_data = await patent_response.json()
+                                    if patent := self._parse_patent_data(patent_data, patent_id):
+                                        patents.append(patent)
+                            except aiohttp.ClientError as e:
+                                logger.error(f"Error fetching patent {patent_id}: {e}")
+                                continue
                     
                     return patents
 
@@ -81,7 +110,7 @@ class RospatentRepository(PatentRepository):
 
     async def get_by_id(self, patent_id: str) -> Optional[Patent]:
         """Получение патента по ID"""
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with aiohttp.ClientSession(timeout=self.timeout, connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
             url = f"{self.config.base_url}/docs/{patent_id}"
 
             try:
