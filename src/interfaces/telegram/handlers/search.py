@@ -231,11 +231,14 @@ class SearchHandler:
                 )
 
             if result.patents:
-                # Формируем сообщение с примененными фильтрами
-                filter_info = self._format_filter_info(search_filter)
+                # Формируем сообщение с примененными фильтрами только для точного поиска
+                message_text = f"✨ <b>Найдено патентов:</b> {result.total_count}"
+                if method == "exact":
+                    filter_info = self._format_filter_info(search_filter)
+                    message_text += f"\n\n{filter_info}"
+                
                 await message.answer(
-                    f"✨ <b>Найдено патентов:</b> {result.total_count}\n\n"
-                    f"{filter_info}",
+                    message_text,
                     parse_mode="HTML"
                 )
 
