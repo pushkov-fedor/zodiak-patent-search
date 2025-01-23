@@ -21,7 +21,7 @@ async def test_search_by_query():
     result = await use_case.search_by_query(query)
 
     # Assert
-    mock_repo.search_by_query.assert_awaited_once_with(query, 4, None)
+    mock_repo.search_by_query.assert_awaited_once_with(query, 10, None)
     assert result.query == query
     assert result.total_count == len(expected_patents)
     assert result.patents == expected_patents
@@ -39,7 +39,7 @@ async def test_search_by_query_with_empty_result():
     result = await use_case.search_by_query(query)
 
     # Assert
-    mock_repo.search_by_query.assert_awaited_once_with(query, 4, None)
+    mock_repo.search_by_query.assert_awaited_once_with(query, 10, None)
     assert result.query == query
     assert result.total_count == 0
     assert result.patents == []

@@ -35,6 +35,7 @@ async def test_handle_search_query_exact(handler):
     message = AsyncMock(spec=Message)
     message.text = "Test Query"
     message.answer = AsyncMock()
+    message.answer_document = AsyncMock()
     state = AsyncMock(spec=FSMContext)
     state.get_data = AsyncMock(return_value={"search_method": "exact"})
 
@@ -64,10 +65,18 @@ async def test_handle_search_query_exact(handler):
 
     # Assert
     handler.search_use_case.search_by_query.assert_awaited_once_with("Test Query", search_filter=None)
-    assert message.answer.await_count == 5  # 1. Начало поиска, 2. Результаты, 3. Патент, 4. Анализ, 5. Новый запрос
-    assert state.set_state.await_count == 1
-
-    # Проверяем, что все вызовы answer были с правильными параметрами
+    
+    # Проверяем количество вызовов answer и answer_document
+    assert message.answer.await_count == 3  # 1. Начало поиска, 2. Результаты поиска, 3. Новый запрос
+    assert message.answer_document.await_count == 1  # Отправка документа с результатами
+    
+    # Проверяем параметры вызовов
     for call_args in message.answer.call_args_list:
-        assert 'parse_mode' in call_args.kwargs  # Проверяем, что во всех вызовах есть parse_mode
-        assert call_args.kwargs['parse_mode'] == "HTML"  # Проверяем значение parse_mode
+        assert 'parse_mode' in call_args.kwargs
+        assert call_args.kwargs['parse_mode'] == "HTML"
+
+    # Проверяем вызов answer_document
+    assert 'caption' in message.answer_document.call_args.kwargs
+    assert message.answer_document.call_args.kwargs['caption'] == "📄 Результаты поиска в формате DOC"
+
+    assert state.set_state.await_count == 1
