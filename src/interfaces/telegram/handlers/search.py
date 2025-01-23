@@ -6,7 +6,7 @@ from typing import Optional
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import FSInputFile, Message
 
 from src.application.services.patent_summarizer import PatentSummarizer
 from src.application.use_cases.patent_search import PatentSearchUseCase
@@ -19,6 +19,7 @@ from src.interfaces.telegram.keyboards.main import (
     create_main_keyboard,
 )
 from src.interfaces.telegram.states.search import SearchStates
+from src.interfaces.telegram.utils.document import create_search_results_doc
 from src.interfaces.telegram.utils.formatters import format_patent_message
 
 logger = logging.getLogger(__name__)
@@ -238,24 +239,30 @@ class SearchHandler:
                     parse_mode="HTML"
                 )
 
-                # Анализируем каждый найденный патент
-                for index, patent in enumerate(result.patents, 1):
-                    # Получаем анализ
+                # Собираем анализы для всех патентов
+                summaries = []
+                for patent in result.patents:
                     analysis = await self.patent_summarizer.analyze_patent(
                         patent.id,
                         patent.get_full_text()
                     )
-                    
-                    # Форматируем сообщение с учетом анализа
-                    messages = format_patent_message(
-                        patent=patent,
-                        index=index,
-                        summary={"status": "success", "summary": analysis} if analysis else None
+                    summaries.append(
+                        {"status": "success", "summary": analysis} if analysis else None
                     )
-                    
-                    # Отправляем каждую часть сообщения
-                    for msg in messages:
-                        await message.answer(msg, parse_mode="HTML")
+                
+                # Создаем документ с результатами
+                filename = create_search_results_doc(result.patents, summaries)
+                
+                # Отправляем документ
+                doc = FSInputFile(filename)
+                await message.answer_document(
+                    doc,
+                    caption="📄 Результаты поиска в формате DOC"
+                )
+                
+                # Удаляем временный файл
+                import os
+                os.remove(filename)
 
             else:
                 await message.answer(

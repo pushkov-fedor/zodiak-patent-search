@@ -27,47 +27,37 @@ def count_words(text: str) -> int:
 def format_patent_analysis(analysis_dict: dict) -> str:
     """Форматирует анализ патента для вывода пользователю"""
     if analysis_dict.get("status") == "error":
-        return (
-            "❌ Ошибка при анализе патента:\n"
-            f"{analysis_dict.get('summary')}\n"
-            f"Техническая информация: {analysis_dict.get('error')}"
-        )
+        return f"Ошибка при анализе патента:\n{analysis_dict.get('summary')}"
 
     summary = analysis_dict.get("summary")
     if not summary:
-        return "⚠️ Пустой ответ от сервиса анализа"
+        return "Пустой ответ от сервиса анализа"
 
-    formatted_text = [
-        "",
-        "📝 Описание:",
-        summary.get('description', 'Описание отсутствует'),
-        ""
-    ]
+    formatted_text = []
+
+    # Описание
+    if summary.get('description'):
+        formatted_text.append(summary['description'])
+        formatted_text.append("")
 
     # Преимущества
     advantages = summary.get('advantages', [])
     if advantages:
-        formatted_text.extend([
-            "✅ Преимущества:"
-        ])
+        formatted_text.append("Преимущества:")
         formatted_text.extend(f"• {adv}" for adv in advantages)
         formatted_text.append("")
 
     # Недостатки
     disadvantages = summary.get('disadvantages', [])
     if disadvantages:
-        formatted_text.extend([
-            "⚠️ Недостатки:"
-        ])
+        formatted_text.append("Недостатки:")
         formatted_text.extend(f"• {dis}" for dis in disadvantages)
         formatted_text.append("")
 
     # Области применения
     applications = summary.get('applications', [])
     if applications:
-        formatted_text.extend([
-            "🎯 Области применения:"
-        ])
+        formatted_text.append("Области применения:")
         formatted_text.extend(f"• {app}" for app in applications)
 
-    return "\n".join(formatted_text)
+    return "\n".join(formatted_text).strip()
