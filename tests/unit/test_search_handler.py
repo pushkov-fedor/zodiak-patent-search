@@ -67,7 +67,7 @@ async def test_handle_search_query_exact(handler):
     handler.search_use_case.search_by_query.assert_awaited_once_with("Test Query", search_filter=None)
     
     # Проверяем количество вызовов answer и answer_document
-    assert message.answer.await_count == 3  # 1. Начало поиска, 2. Результаты поиска, 3. Новый запрос
+    assert message.answer.await_count == 4  # 1. Начало поиска, 2. Результаты поиска, 3. Сообщение об анализе, 4. Новый запрос
     assert message.answer_document.await_count == 1  # Отправка документа с результатами
     
     # Проверяем параметры вызовов
