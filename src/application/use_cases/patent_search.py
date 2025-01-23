@@ -25,7 +25,7 @@ class PatentSearchUseCase:
     async def search_by_query(
         self, 
         query: str, 
-        limit: int = 4,
+        limit: int = 10,
         search_filter: Optional[SearchFilter] = None
     ) -> PatentSearchResult:
         """Поиск патентов по запросу"""
@@ -40,7 +40,7 @@ class PatentSearchUseCase:
             query=query
         )
 
-    async def search_similar(self, text: str, limit: int = 4) -> PatentSearchResult:
+    async def search_similar(self, text: str, limit: int = 10) -> PatentSearchResult:
         """Семантический поиск патентов"""
         patents = await self.patent_repository.search_similar(text, limit)
         return PatentSearchResult(
