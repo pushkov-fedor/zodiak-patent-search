@@ -243,6 +243,11 @@ class SearchHandler:
                 )
 
                 # Собираем анализы для всех патентов
+                await message.answer(
+                    "⏳ Выполняется анализ найденных патентов и формирование документа...",
+                    parse_mode="HTML"
+                )
+                
                 summaries = []
                 for patent in result.patents:
                     analysis = await self.patent_summarizer.analyze_patent(

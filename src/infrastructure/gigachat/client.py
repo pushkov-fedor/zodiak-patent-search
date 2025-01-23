@@ -116,7 +116,7 @@ class GigaChatClient:
                 }
             ],
             "temperature": 1,
-            "max_tokens": 1500
+            "max_tokens": 4000
         }
 
         try:
