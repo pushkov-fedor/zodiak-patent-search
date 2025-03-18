@@ -279,7 +279,8 @@ class SearchHandler:
                 )
 
         except Exception as e:
-            logger.error(f"Ошибка при обработке запроса: {e}")
+            import traceback
+            logger.error(f"Ошибка при обработке запроса: {repr(e)}\n{traceback.format_exc()}")
             await message.answer(
                 "❌ Произошла ошибка при обработке запроса"
             )
